@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OnlyCoins Candle Collector</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <style>
+        /* General body styling for a retro feel */
+        body {
+            /* Glitter white effect for the background */
+            background: linear-gradient(
+                120deg,
+                #f5f5f5 0%,
+                #e0e0e0 25%,
+                #f5f5f5 50%,
+                #e0e0e0 75%,
+                #f5f5f5 100%
+            );
+            background-repeat: repeat;
+            color: #000;
+            font-family: 'Press Start 2P', cursive;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            flex-direction: column;
+            text-align: center;
+            overflow: hidden;
+            animation: glitter-background 2s infinite linear;
+        }
+
+        @keyframes glitter-background {
+            to {
+                background-position: 200% center;
+            }
+        }
+
+        /* Game over message displayed in the center of the screen */
+        #game-message {
+            position: absolute;
+            top: 40%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 100;
+            text-align: center;
+            color: white;
+            text-shadow: 2px 2px #000;
+            font-size: 24px;
+            display: none; /* Initially hidden */
+        }
+        
+        /* The start/restart button is now centered on the screen */
+        #action-button {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 100;
+            display: block;
+        }
+
+        /* Style the canvas to have a pixelated, bordered look */
+        canvas {
+            border: 4px solid #fff;
+            image-rendering: pixelated;
+            max-width: 90vw;
+            max-height: 80vh;
+            background-color: #000; /* Game background is still black for contrast */
+        }
+
+        /* Game title and score text */
+        h1 {
+            margin: 10px;
+            text-shadow: 2px 2px #000;
+            /* Glitter blue effect for the title */
+            background: linear-gradient(
+                120deg,
+                #64b5f6 0%,
+                #bbdefb 25%,
+                #64b5f6 50%,
+                #bbdefb 75%,
+                #64b5f6 100%
+            );
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: bold;
+            animation: glitter-anim 2s infinite linear;
+        }
+        @keyframes glitter-anim {
+            to {
+                background-position: 200% center;
+            }
+        }
+        p {
+            margin: 10px;
+            text-shadow: 2px 2px #000;
+        }
+
+        /* Button styling for a retro look */
+        button {
+            background-color: #fff;
+            color: #000;
+            border: 2px solid #000;
+            padding: 10px 20px;
+            font-family: 'Press Start 2P', cursive;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 20px;
+            border-radius: 0;
+            box-shadow: 4px 4px #000;
+            transition: all 0.1s ease;
+        }
+        
+        button:active {
+            box-shadow: 2px 2px #000;
+            transform: translate(2px, 2px);
+        }
+
+        button:hover {
+            background-color: #ddd;
+        }
+
+        /* Use a custom font to enhance the retro feel */
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+    </style>
+</head>
+<body>
+    <div id="game-message"></div>
+    <button id="action-button">Start Game</button>
+
+    <h1>OnlyCoins Candle Collector</h1>
+    <p>Score: <span id="score">0</span></p>
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        window.onload = function() {
+            const canvas = document.getElementById('gameCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            canvas.width = 320;
+            canvas.height = 480;
+
+            const player = {
+                x: canvas.width / 2 - 10,
+                y: canvas.height - 30,
+                width: 20,
+                height: 20,
+                color: 'blue',
+                speed: 4
+            };
+
+            let enemies = [];
+            let enemySpeed = 2;
+            let spawnRate = 10; // Adjusted to increase frequency by 1/5
+            let frameCount = 0;
+            let animationId;
+            const bigBlockSpawnRate = 300;
+            const bigBlockSize = 80;
+            const greenBlockSpawnRate = 180;
+            let multiplier = 1;
+
+            let score = 0;
+            let gameOver = false;
+            let gameStarted = false;
+
+            const scoreElement = document.getElementById('score');
+            const gameMessageElement = document.getElementById('game-message');
+            const actionButton = document.getElementById('action-button');
+
+            // --- Audio setup with Tone.js ---
+            // Main melody synth
+            const mainSynth = new Tone.PolySynth(Tone.Synth, {
+                oscillator: { type: "sine" },
+                envelope: {
+                    attack: 0.001,
+                    decay: 0.1,
+                    sustain: 0.3,
+                    release: 1
+                }
+            }).toDestination();
+            
+            // Higher-pitched counter-melody synth
+            const counterSynth = new Tone.PolySynth(Tone.Synth, {
+                oscillator: { type: "triangle" },
+                envelope: {
+                    attack: 0.001,
+                    decay: 0.1,
+                    sustain: 0.3,
+                    release: 1
+                }
+            }).toDestination();
+
+            // Lower-pitched harmony synth, with reduced volume
+            const harmonySynth = new Tone.PolySynth(Tone.Synth, {
+                oscillator: { type: "square" },
+                envelope: {
+                    attack: 0.001,
+                    decay: 0.1,
+                    sustain: 0.3,
+                    release: 1
+                }
+            }).toDestination();
+            harmonySynth.volume.value = -10;
+
+            // Tenor counter-melody synth
+            const tenorSynth = new Tone.PolySynth(Tone.Synth, {
+                oscillator: { type: "sawtooth" },
+                envelope: {
+                    attack: 0.001,
+                    decay: 0.1,
+                    sustain: 0.3,
+                    release: 1
+                }
+            }).toDestination();
+            tenorSynth.volume.value = -5;
+
+            // Game over sound effect synth
+            const defeatSynth = new Tone.PolySynth(Tone.Synth, {
+                oscillator: { type: "square" },
+                envelope: {
+                    attack: 0.1,
+                    decay: 0.3,
+                    sustain: 0.1,
+                    release: 0.5
+                }
+            }).toDestination();
+
+            // Eight-bar main melody sequence
+            const mainNotes = [
+                "C4", "E4", "G4", "A4", "G4", "E4", "C4", "C4",
+                "F4", "A4", "C5", "A4", "G4", "E4", "F4", "G4"
+            ];
+            const mainSequence = new Tone.Sequence((time, note) => {
+                mainSynth.triggerAttackRelease(note, "8n", time);
+            }, mainNotes, "4n").start(0);
+            mainSequence.loop = true;
+
+            // Eight-bar higher-pitched counter-melody sequence
+            const counterNotes = [
+                "G5", "F5", "E5", "D5", "E5", "D5", "C5", "C5",
+                "A5", "G5", "F5", "E5", "D5", "C5", "B4", "A4"
+            ];
+            const counterSequence = new Tone.Sequence((time, note) => {
+                counterSynth.triggerAttackRelease(note, "8n", time);
+            }, counterNotes, "4n").start("4n");
+            counterSequence.loop = true;
+
+            // Harmony sequence using whole and half notes
+            const harmonyPart = new Tone.Part((time, note) => {
+                harmonySynth.triggerAttackRelease(note, "1n", time);
+            }, [
+                ["0:0:0", "C3"], ["1:0:0", "G3"], ["2:0:0", "C3"], ["3:0:0", "G3"],
+                ["4:0:0", "F3"], ["5:0:0", "C4"], ["6:0:0", "G3"], ["7:0:0", "C4"]
+            ]).start(0);
+            harmonyPart.loop = true;
+            harmonyPart.loopEnd = "8m";
+
+            // Tenor counter-melody using quarter and half notes
+            const tenorNotes = [
+                "C3", "C3", "E3", "E3", "G3", "G3", "A3", "A3",
+                "F3", "F3", "G3", "G3", "E3", "E3", "D3", "D3"
+            ];
+            const tenorSequence = new Tone.Sequence((time, note) => {
+                tenorSynth.triggerAttackRelease(note, "4n", time);
+            }, tenorNotes, "2n").start(0);
+            tenorSequence.loop = true;
+            
+            // Game over defeat melody
+            const defeatNotes = ["C3", "G2", "E2"];
+            const defeatDurations = ["4n", "4n", "2n"];
+
+            function playDefeatSound() {
+                const now = Tone.now();
+                defeatSynth.triggerAttackRelease(defeatNotes, defeatDurations, now);
+            }
+
+            function playMelody() {
+                Tone.start();
+                Tone.Transport.start();
+            }
+            
+            function stopMelody() {
+                Tone.Transport.stop();
+            }
+
+            // --- Game Functions ---
+            function showMessage(text, buttonText = 'Start Game') {
+                gameMessageElement.textContent = text;
+                gameMessageElement.style.display = 'block';
+                actionButton.textContent = buttonText;
+                actionButton.style.display = 'block';
+            }
+
+            function hideMessage() {
+                gameMessageElement.style.display = 'none';
+                actionButton.style.display = 'none';
+            }
+
+            function drawPlayer() {
+                ctx.fillStyle = player.color;
+                ctx.fillRect(player.x, player.y, player.width, player.height);
+            }
+
+            function spawnEnemy() {
+                const enemyWidth = 20;
+                const enemyHeight = 20;
+                const enemyX = Math.random() * (canvas.width - enemyWidth);
+                const enemyColor = 'red';
+                enemies.push({ x: enemyX, y: -enemyHeight, width: enemyWidth, height: enemyHeight, color: enemyColor, type: 'normal' });
+            }
+
+            function spawnBigBlock() {
+                const enemyX = Math.random() * (canvas.width - bigBlockSize);
+                const enemyColor = 'purple';
+                enemies.push({ 
+                    x: enemyX, 
+                    y: -bigBlockSize, 
+                    width: bigBlockSize, 
+                    height: bigBlockSize, 
+                    color: enemyColor, 
+                    type: 'big' 
+                });
+            }
+
+            function spawnGreenBlock() {
+                const enemyWidth = 20;
+                const enemyHeight = 20;
+                const enemyX = Math.random() * (canvas.width - enemyWidth);
+                const enemyColor = 'lime';
+                enemies.push({ x: enemyX, y: -enemyHeight, width: enemyWidth, height: enemyHeight, color: enemyColor, type: 'point' });
+            }
+
+            function drawEnemies() {
+                enemies.forEach(enemy => {
+                    ctx.fillStyle = enemy.color;
+                    ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
+                });
+            }
+
+            function updateEnemies() {
+                enemies.forEach(enemy => {
+                    enemy.y += enemySpeed;
+                });
+                enemies = enemies.filter(enemy => enemy.y < canvas.height);
+            }
+
+            function checkCollision() {
+                for (let i = enemies.length - 1; i >= 0; i--) {
+                    const enemy = enemies[i];
+                    if (
+                        player.x < enemy.x + enemy.width &&
+                        player.x + player.width > enemy.x &&
+                        player.y < enemy.y + enemy.height &&
+                        player.y + player.height > enemy.y
+                    ) {
+                        if (enemy.type === 'normal' || enemy.type === 'big') {
+                            gameOver = true;
+                            gameStarted = false;
+                            cancelAnimationFrame(animationId);
+                            stopMelody();
+                            playDefeatSound();
+                            const finalScore = Math.floor(score * multiplier);
+                            showMessage(`Game Over! Final Score: ${finalScore}`, 'Restart');
+                            return;
+                        } else if (enemy.type === 'point') {
+                            multiplier++;
+                            enemies.splice(i, 1);
+                        }
+                    }
+                }
+            }
+
+            function updateScore() {
+                score = Math.floor(frameCount / 10);
+                scoreElement.textContent = Math.floor(score * multiplier);
+            }
+
+            // --- Game Loop ---
+            function gameLoop() {
+                if (!gameStarted) {
+                    return;
+                }
+
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                if (frameCount % spawnRate === 0) {
+                    spawnEnemy();
+                }
+                if (frameCount > 0 && frameCount % bigBlockSpawnRate === 0) {
+                    spawnBigBlock();
+                }
+                if (frameCount > 0 && frameCount % greenBlockSpawnRate === 0) {
+                    spawnGreenBlock();
+                }
+
+                updateEnemies();
+                checkCollision();
+                // We'll update the score based on time and not collision for a more fluid experience
+                updateScore();
+                handleMovement();
+
+                drawPlayer();
+                drawEnemies();
+
+                frameCount++;
+                animationId = requestAnimationFrame(gameLoop);
+            }
+
+            // --- Event Listeners for Player Movement ---
+            let keys = {};
+            document.addEventListener('keydown', (e) => {
+                keys[e.key] = true;
+            });
+            document.addEventListener('keyup', (e) => {
+                keys[e.key] = false;
+            });
+
+            function handleMovement() {
+                if (keys['ArrowLeft'] || keys['a']) {
+                    player.x -= player.speed;
+                }
+                if (keys['ArrowRight'] || keys['d']) {
+                    player.x += player.speed;
+                }
+                player.x = Math.max(0, Math.min(canvas.width - player.width, player.x));
+            }
+
+            // Touch event listeners for mobile devices
+            canvas.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                const touchX = e.touches[0].clientX;
+                const canvasRect = canvas.getBoundingClientRect();
+                const touchCanvasX = touchX - canvasRect.left;
+                
+                if (touchCanvasX < canvas.width / 2) {
+                    keys['ArrowLeft'] = true;
+                    keys['ArrowRight'] = false;
+                } else {
+                    keys['ArrowRight'] = true;
+                    keys['ArrowLeft'] = false;
+                }
+            });
+
+            canvas.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                const touchX = e.touches[0].clientX;
+                const canvasRect = canvas.getBoundingClientRect();
+                const touchCanvasX = touchX - canvasRect.left;
+                
+                if (touchCanvasX < canvas.width / 2) {
+                    keys['ArrowLeft'] = true;
+                    keys['ArrowRight'] = false;
+                } else {
+                    keys['ArrowRight'] = true;
+                    keys['ArrowLeft'] = false;
+                }
+            });
+
+            canvas.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                keys['ArrowLeft'] = false;
+                keys['ArrowRight'] = false;
+            });
+            
+            // Mouse events for movement
+            canvas.addEventListener('mousedown', (e) => {
+                 const mouseX = e.clientX - canvas.getBoundingClientRect().left;
+                 if (mouseX < canvas.width / 2) {
+                     keys['ArrowLeft'] = true;
+                     keys['ArrowRight'] = false;
+                 } else {
+                     keys['ArrowRight'] = true;
+                     keys['ArrowLeft'] = false;
+                 }
+            });
+
+            canvas.addEventListener('mouseup', () => {
+                keys['ArrowLeft'] = false;
+                keys['ArrowRight'] = false;
+            });
+
+            // Start/Restart button click handler
+            actionButton.addEventListener('click', () => {
+                if (!gameStarted) {
+                    resetGame();
+                    hideMessage();
+                    gameStarted = true;
+                    playMelody();
+                    gameLoop();
+                }
+            });
+
+            // Function to reset the game to its initial state
+            function resetGame() {
+                enemies = [];
+                score = 0;
+                multiplier = 1;
+                gameOver = false;
+                frameCount = 0;
+                player.x = canvas.width / 2 - 10;
+                scoreElement.textContent = score;
+            }
+
+            // Initial message to prompt the user to start
+            showMessage('Start Game', 'Start');
+        };
+    </script>
+</body>
+</html>
+
+
