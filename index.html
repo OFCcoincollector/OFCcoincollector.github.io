@@ -142,6 +142,7 @@
             canvas.width = 320;
             canvas.height = 480;
 
+            // Player properties
             const player = {
                 x: canvas.width / 2 - 10,
                 y: canvas.height - 30,
@@ -151,14 +152,21 @@
                 speed: 4
             };
 
+            // Game state variables
             let enemies = [];
             let enemySpeed = 2;
-            let spawnRate = 10; // Adjusted to increase frequency by 1/5
+            
+            // New spawn rates based on your requests
+            // Old spawn rate was 10, new is 30% more frequent (10 / 1.3)
+            const redBlockSpawnRate = Math.floor(10 / 1.3); 
+            // Old spawn rate was 300, new is 20% more frequent (300 / 1.2)
+            const purpleBlockSpawnRate = Math.floor(300 / 1.2); 
+            
+            const greenBlockSpawnRate = 180;
+            const bigBlockSize = 80;
+
             let frameCount = 0;
             let animationId;
-            const bigBlockSpawnRate = 300;
-            const bigBlockSize = 80;
-            const greenBlockSpawnRate = 180;
             let multiplier = 1;
 
             let score = 0;
@@ -170,7 +178,7 @@
             const actionButton = document.getElementById('action-button');
 
             // --- Audio setup with Tone.js ---
-            // Main melody synth
+            // Main melody synth for the primary tune
             const mainSynth = new Tone.PolySynth(Tone.Synth, {
                 oscillator: { type: "sine" },
                 envelope: {
@@ -192,7 +200,7 @@
                 }
             }).toDestination();
 
-            // Lower-pitched harmony synth, with reduced volume
+            // Lower-pitched harmony synth, with reduced volume for background sound
             const harmonySynth = new Tone.PolySynth(Tone.Synth, {
                 oscillator: { type: "square" },
                 envelope: {
@@ -247,17 +255,17 @@
             }, counterNotes, "4n").start("4n");
             counterSequence.loop = true;
 
-            // Harmony sequence using whole and half notes
+            // Eight-bar baritone harmony sequence using half and whole notes
             const harmonyPart = new Tone.Part((time, note) => {
                 harmonySynth.triggerAttackRelease(note, "1n", time);
             }, [
-                ["0:0:0", "C3"], ["1:0:0", "G3"], ["2:0:0", "C3"], ["3:0:0", "G3"],
-                ["4:0:0", "F3"], ["5:0:0", "C4"], ["6:0:0", "G3"], ["7:0:0", "C4"]
+                ["0:0:0", "C3"], ["1:0:0", "G3"], ["2:0:0", "C3"], ["2:2:0", "G3"], // Half note at 2:2:0
+                ["3:0:0", "F3"], ["4:0:0", "C4"], ["5:0:0", "G3"], ["6:0:0", "C4"]
             ]).start(0);
             harmonyPart.loop = true;
             harmonyPart.loopEnd = "8m";
 
-            // Tenor counter-melody using quarter and half notes
+            // Tenor counter-melody using quarter notes with half-note spacing
             const tenorNotes = [
                 "C3", "C3", "E3", "E3", "G3", "G3", "A3", "A3",
                 "F3", "F3", "G3", "G3", "E3", "E3", "D3", "D3"
@@ -277,7 +285,11 @@
             }
 
             function playMelody() {
-                Tone.start();
+                // This is a crucial step for mobile compatibility. Audio contexts can only be
+                // started after a user interaction. The action button provides this.
+                if (Tone.context.state !== 'running') {
+                    Tone.context.resume();
+                }
                 Tone.Transport.start();
             }
             
@@ -343,6 +355,7 @@
                 enemies.forEach(enemy => {
                     enemy.y += enemySpeed;
                 });
+                // Efficiently removes blocks that have moved off-screen
                 enemies = enemies.filter(enemy => enemy.y < canvas.height);
             }
 
@@ -356,6 +369,7 @@
                         player.y + player.height > enemy.y
                     ) {
                         if (enemy.type === 'normal' || enemy.type === 'big') {
+                            // Game over condition
                             gameOver = true;
                             gameStarted = false;
                             cancelAnimationFrame(animationId);
@@ -365,7 +379,8 @@
                             showMessage(`Game Over! Final Score: ${finalScore}`, 'Restart');
                             return;
                         } else if (enemy.type === 'point') {
-                            multiplier++;
+                            // Green block collected, multiply score
+                            multiplier *= 1.5;
                             enemies.splice(i, 1);
                         }
                     }
@@ -385,10 +400,10 @@
 
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-                if (frameCount % spawnRate === 0) {
+                if (frameCount % redBlockSpawnRate === 0) {
                     spawnEnemy();
                 }
-                if (frameCount > 0 && frameCount % bigBlockSpawnRate === 0) {
+                if (frameCount > 0 && frameCount % purpleBlockSpawnRate === 0) {
                     spawnBigBlock();
                 }
                 if (frameCount > 0 && frameCount % greenBlockSpawnRate === 0) {
