@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OnlyCoins Candle Collector</title>
+    <title>$OFC Coin Collector</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
     <style>
         /* General body styling for a retro feel */
@@ -130,7 +130,7 @@
     <div id="game-message"></div>
     <button id="action-button">Start Game</button>
 
-    <h1>OnlyCoins Candle Collector</h1>
+    <h1>$OFC Coin Collector</h1>
     <p>Score: <span id="score">0</span></p>
     <canvas id="gameCanvas"></canvas>
 
@@ -157,8 +157,8 @@
             let enemySpeed = 2;
             
             // New spawn rates based on your requests
-            // Old spawn rate was 10, new is 30% more frequent (10 / 1.3)
-            const redBlockSpawnRate = Math.floor(10 / 1.3); 
+            // Old spawn rate was 10, now it's 1/8 less frequent (10 / (1 - 1/8))
+            const redBlockSpawnRate = Math.floor(10 / (1 - 1/8)); 
             // Old spawn rate was 300, new is 20% more frequent (300 / 1.2)
             const purpleBlockSpawnRate = Math.floor(300 / 1.2); 
             
